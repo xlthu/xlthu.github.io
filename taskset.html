@@ -1,0 +1,409 @@
+<html lang="zh-cn">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Taskset 工具</title>
+
+    <style>
+        body {
+            margin: auto;
+            width: 75%;
+            margin-top: 1em;
+            line-height: 200%;
+        }
+
+        .center {
+            width: 100%;
+            margin: auto;
+            text-align: center;
+        }
+
+        .box {
+            padding: 5px 10px;
+            margin: 5px;
+            border: 1px solid darkcyan;
+        }
+
+        /* * {
+            border: black solid;
+        } */
+
+        table#taskset {
+            margin-left: auto;
+            margin-right: auto;
+            text-align: center;
+            table-layout: fixed;
+            border-collapse: collapse;
+        }
+
+        table#taskset td {
+            margin: auto;
+            word-break: break-all;
+            padding: 5px 10px;
+        }
+
+        table#taskset th, td {
+            border-top: rgba(0,0,0,0.1) solid;
+            border-bottom: rgba(0,0,0,0.1) solid;
+        }
+
+        table#taskset tr#hex td {
+            color: rgba(0,0,0,0.3);
+        }
+
+        table#taskset tr#selector .selected {
+            font-size: 4em;
+        }
+
+        table#taskset tr#selector .index {
+            padding-bottom: 2em;
+            color: rgba(0,0,0,0.3);
+        }
+
+        table#taskset th {
+            padding-left: 10px;
+            padding-right: 50px;
+            font-weight: normal;
+            color: rgba(0,0,0,0.3);
+        }
+
+        div.comment-input {
+            min-height: 1em;
+            width: 5em;
+            word-break: break-all;
+        }
+
+        #taskset-hex {
+            text-align: center;
+        }
+
+        div.hbar {
+            height: 3em;
+        }
+
+        table#record {
+            margin-left: auto;
+            margin-right: auto;
+            text-align: center;
+            table-layout: fixed;
+            border-collapse: collapse;
+        }
+
+        table#record td {
+            margin: auto;
+            padding: 5px 10px;
+        }
+
+        table#record th, td {
+            border-top: rgba(0,0,0,0.1) solid;
+            border-bottom: rgba(0,0,0,0.1) solid;
+        }
+
+        table#record td.h-desc {
+            width: 10em;
+        }
+
+        table#record td.h-selected {
+            width: 15em;
+        }
+
+        table#record td.selected-hex {
+            width: 7em;
+        }
+
+        table#record td.selected-idx {
+            width: 7em;
+        }
+
+        table#record td.h-hex {
+            width: 10em;
+        }
+
+        table#record td.h-del {
+            width: 5em;
+        }
+
+        table#record div.desc-input {
+            margin: auto;
+            min-height: 1em;
+            width: 8em;
+            word-break: break-all;
+        }
+
+    </style>
+
+    <script>
+        var default_one_core_config = {
+            "selected": false,
+            "comment": ""
+        }
+        var config = [];
+        var record = [];
+        var taskset_hex = 0;
+        
+        function select(idx) {
+            config[idx].selected = !config[idx].selected;
+            onConfigChanged();
+        }
+
+        function finishEdit(idx) {
+            var comment = document.getElementById(`comment-${idx}`);
+            config[idx].comment = comment.textContent;
+            onConfigChanged();
+        }
+
+        function onConfigChanged() {
+            var hex = document.getElementById("hex");
+            var selector = document.getElementById("selector");
+            var comment = document.getElementById("comment");
+
+            for (var i = hex.childElementCount; i > 1; --i) {
+                hex.removeChild(hex.lastElementChild);
+                selector.removeChild(selector.lastElementChild);
+                comment.removeChild(comment.lastElementChild);
+            }
+
+            taskset_hex = 0;
+            
+            for (var i = config.length - 1; i >=0; --i) {
+                var c = config[i];
+                var hex_template = `<td>0x${(1 << i).toString(16)}</td>`;
+                var selected = (c.selected) ? "1" : "0";
+                if (c.selected) {
+                    taskset_hex += 1 << i;
+                }
+                var selector_template = `<td><span class="selected" onclick="select(${i})">${selected}</span><span class="index">${i}</span></td>`;
+                var comment_template = `<td><div contenteditable="true" class="comment-input" onfocusout="finishEdit(${i});" id="comment-${i}">${c.comment}</div></td>`;
+
+                hex.innerHTML += hex_template;
+                selector.innerHTML += selector_template;
+                comment.innerHTML += comment_template;
+            }
+
+            document.getElementById("taskset-hex").innerText = `0x${taskset_hex.toString(16)}`;
+        }
+
+        function clickCore() {
+            var num_core = document.getElementById("core_num").value;
+            for (var i = config.length; i < num_core; ++i) {
+                config.push(structuredClone(default_one_core_config));
+            }
+            for (var i = config.length; i > num_core; --i) {
+                config.pop();
+            }
+            onConfigChanged();
+        }
+
+        function resetSelected() {
+            for (var c of config) {
+                c.selected = false;
+            }
+            onConfigChanged();
+        }
+
+        function reset() {
+            if (!confirm("将重置“选中”和“注释”")) return;
+
+            var num_core = document.getElementById("core_num").value;
+            config = [];
+            for (var i = 0; i < num_core; ++i) {
+                config.push(structuredClone(default_one_core_config));
+            }
+            onConfigChanged();
+        }
+
+        function clickTasksetHex() {
+            navigator.clipboard.writeText(`${taskset_hex.toString(16)}`);
+            document.getElementById("taskset-copyed").innerText = "(copyed)";
+            setTimeout(function(){
+                document.getElementById("taskset-copyed").innerText = "";
+            }, 1000);
+        }
+
+        async function loadConfig() {
+            var file = document.getElementById("config").files.item(0);
+            if (!file) return;
+            const text = await file.text();
+            all = JSON.parse(text);
+            config = all["config"];
+            record = all["record"];
+            onConfigChanged();
+            onRecordChanged();
+        }
+
+        async function saveConfig() {
+            var handle;
+            try {
+                handle = await showSaveFilePicker({
+                    suggestedName: 'taskset.json',
+                    types: [{
+                        description: 'JSON file',
+                        accept: {'text/plain': ['.json']},
+                    }],
+                });
+            } catch (e) {
+                console.log(e);
+                return;
+            }
+
+            let textData = JSON.stringify({
+                "config": config,
+                "record": record
+            });
+
+            const writableStream = await handle.createWritable();
+            await writableStream.write(new Blob([textData], {type: "text/plain"}));
+            await writableStream.close();
+        }
+
+        function clickRecordHex(hex) {
+            navigator.clipboard.writeText(`${hex.toString(16)}`);
+            document.getElementById("record-copyed").innerText = "(copyed)";
+            setTimeout(function(){
+                document.getElementById("record-copyed").innerText = "";
+            }, 1000);
+        }
+
+        function constructSelectedString(selected) {
+            var s = "";
+            for (var i = selected.length - 1; i > 0; --i) {
+                if (selected[i]) {
+                    s += "1";
+                } else {
+                    s += "0";
+                }
+            }
+            return s;
+        }
+
+        function constructSelectedIdx(selected) {
+            var s = [];
+            for (var i = 0; i < selected.length; ++i) {
+                if (selected[i]) {
+                    s.push(i);
+                }
+            }
+            return s;
+        }
+
+        function constructHex(selected) {
+            var hex = 0;
+            for (var i = 0; i < selected.length; ++i) {
+                if (selected[i]) {
+                    hex += (1 << i);
+                }
+            }
+            return hex;
+        }
+
+        function onRecordChanged() {
+            var r = document.getElementById("record");
+            for (var i = r.childElementCount; i > 1; --i) {
+                r.removeChild(r.lastElementChild);
+            }
+
+            for (var i = 0; i < record.length; ++i) {
+                var re = record[i];
+                var selected = re.selected;
+                var hex = constructHex(selected).toString(16);
+                var selectedStr = constructSelectedString(selected);
+                var selectedIdx = constructSelectedIdx(selected).toString() || "-";
+                
+                var desc_template = `<td><div contenteditable="true" class="desc-input" onfocusout="finishDesc(${i});" id="desc-${i}">${re.desc}</div></td>`;
+                var selected_temaplte = `<td class="selected-hex">${selectedStr}</td>` + `<td class="selected-idx">${selectedIdx}</td>`;
+                var hex_template = `<td class="hex" onclick="clickRecordHex(${hex})">0x${hex}</td>`;
+                var del_template = `<td><button onclick="delRecord(${i})">删除</button></td>`;
+
+                r.innerHTML += `<tr>${desc_template}${selected_temaplte}${hex_template}${del_template}</tr>`;
+            }
+        }
+
+        function finishDesc(idx) {
+            var desc = document.getElementById(`desc-${idx}`);
+            record[idx].desc = desc.textContent;
+            onRecordChanged();
+        }
+        
+        function saveRecord() {
+            var selected = [];
+            for (var i = 0; i < config.length; ++i) {
+                selected.push(config[i].selected);
+            }
+            record.push({
+                "selected": selected,
+                "desc": "",
+            });
+
+            onRecordChanged();
+        }
+
+        function delAllRecord() {
+            record = [];
+            onRecordChanged();
+        }
+
+        function delRecord(i) {
+            record.splice(i, 1);
+            onRecordChanged();
+        }
+
+    </script>
+
+</head>
+
+<body onload="clickCore();">
+    <h1 class="center">Taskset 工具</h1>
+
+    <div class="box">
+        配置：
+        <input type="file" name="config" id="config" />
+        <button onclick="loadConfig();">加载</button>
+        <button onclick="saveConfig();">保存配置到文件...</button>
+    </div>
+
+    <div class="box">
+        <span>
+            核心数目：
+            <input type="number" name="core_num" id="core_num" min="1" value="8" style="width: 3em;"/>
+            <button onclick="clickCore()">确定</button>
+        </span>&emsp;
+        <span>
+            <button onclick="resetSelected()">重置选中</button>
+            <button onclick="reset()">重置所有</button>
+        </span>
+    </div>
+
+    <div class="center">
+        <span>taskset 字符串：</span><span id="taskset-hex" onclick="clickTasksetHex()"></span>&emsp;<span id="taskset-copyed"></span>
+    </div>
+
+    <table id="taskset">
+        <tr id="hex">
+            <th>HEX</th>
+        </tr>
+        <tr id="selector">
+            <th>选中</th>
+        </tr>
+        <tr id="comment">
+            <th>注释</th>
+        </tr>
+    </table>
+
+    <div class="hbar"></div>
+
+    <div class="center">
+        记录&emsp;
+        <button onclick="saveRecord()">保存记录</button>
+        <button onclick="delAllRecord()">删除所有记录</button>
+        &emsp;<span id="record-copyed"></span>
+    </div>
+
+    <table id="record">
+        <tr>
+            <td class="h-desc">说明</td><td class="h-selected" colspan="2">选中</td><td class="h-hex">taskset 字符串</td><td class="h-del">删除</td>
+        </tr>
+    </table>
+
+</body>
+
+</html>
